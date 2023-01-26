@@ -1,0 +1,52 @@
+# ! make sure your Cloud Build service account is allowed to deploy to Cloud Run (developer role)
+steps:
+  # Install dependencies
+  - name: python
+    entrypoint: pip
+    args: ["install", "-r", "requirements.txt", "--user"]
+  # Run unit tests
+  - name: python
+    entrypoint: python
+    args: ["./src/test_flaskr.py"]
+  # Build the image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      [
+        "build",
+        "-t",
+        "europe-west1-docker.pkg.dev/pips-374318/letscode/python:$TAG_NAME",
+        "-f",
+        "prod.Dockerfile",
+        ".",
+      ]
+    id: Build
+  # Push the image to the Artifact Registry
+  - name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - "europe-west1-docker.pkg.dev/pips-374318/letscode/python:$TAG_NAME"
+    id: Push
+  # Deploy to Cloud Run service
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    args:
+      - run
+      - services
+      - update
+      - cloudbuild-example
+      - "--platform=managed"
+      - "--image=europe-west1-docker.pkg.dev/pips-374318/letscode/python:$TAG_NAME"
+      - >-
+        --labels=managed-by=gcp-cloud-build-deploy-cloud-run,commit-sha=$COMMIT_SHA,gcb-build-id=$BUILD_ID
+      - "--region=europe-west1"
+      - "--quiet"
+    id: Deploy
+    entrypoint: gcloud
+# Artifact is stored in Artifact Registry
+images:
+  - "europe-west1-docker.pkg.dev/pips-374318/letscode/python:$TAG_NAME"
+options:
+  substitutionOption: ALLOW_LOOSE
+tags:
+  - gcp-cloud-build-deploy-cloud-run
+  - gcp-cloud-build-deploy-cloud-run-managed
+  - python
